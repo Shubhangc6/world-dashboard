@@ -14,22 +14,30 @@ df = pd.read_excel("World_development_mesurement.xlsx")
 df.columns = df.columns.str.strip()
 
 # ================= DATA CLEANING =================
-def clean_column(col):
-    return pd.to_numeric(df[col].astype(str).str.replace('[\$,]', '', regex=True), errors='coerce')
 
-# Clean numeric columns
+def clean_numeric(col):
+    return pd.to_numeric(
+        df[col].astype(str).str.replace('[\$,]', '', regex=True).str.strip(),
+        errors='coerce'
+    )
+
+# Clean main numeric columns
 for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound"]:
     if col in df.columns:
-        df[col] = clean_column(col)
+        df[col] = clean_numeric(col)
 
-# 🔥 FIX Internet Usage (handles %, decimal, string)
+# 🔥 STRONG Internet Usage Fix (handles all cases)
 if "Internet Usage" in df.columns:
-    df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True)
+    df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True).str.strip()
     df["Internet Usage"] = pd.to_numeric(df["Internet Usage"], errors='coerce')
 
-    # Convert decimal to percentage if needed
+    # Case 1: decimal values (0.65 → 65)
     if df["Internet Usage"].max() <= 1:
         df["Internet Usage"] = df["Internet Usage"] * 100
+
+    # Case 2: wrongly scaled (6500 → 65)
+    elif df["Internet Usage"].max() > 1000:
+        df["Internet Usage"] = df["Internet Usage"] / 100
 
 # ================= SIDEBAR =================
 st.sidebar.header("Filters")
@@ -42,10 +50,9 @@ df2 = df[df["Country"] == country2]
 
 # ================= FORMAT FUNCTION =================
 def format_millions(value):
-    try:
+    if pd.notna(value):
         return f"{value/1_000_000:.2f} M"
-    except:
-        return "N/A"
+    return "N/A"
 
 # ================= KPI SECTION =================
 st.subheader("📊 Key Metrics")
@@ -53,32 +60,24 @@ st.subheader("📊 Key Metrics")
 col1, col2, col3 = st.columns(3)
 
 # GDP
-try:
-    col1.metric("GDP", format_millions(df1["GDP"].values[0]))
-except:
-    col1.metric("GDP", "N/A")
+col1.metric("GDP", format_millions(df1["GDP"].values[0]))
 
 # Population
-try:
-    col2.metric("Population", format_millions(df1["Population Total"].values[0]))
-except:
-    col2.metric("Population", "N/A")
+col2.metric("Population", format_millions(df1["Population Total"].values[0]))
 
-# Internet Usage (FIXED)
-try:
-    val = df1["Internet Usage"].values[0]
-    if pd.notna(val):
-        col3.metric("Internet Usage (%)", f"{val:.2f}%")
-    else:
-        col3.metric("Internet Usage", "N/A")
-except:
-    col3.metric("Internet Usage", "N/A")
+# 🔥 Internet Usage FINAL FIX
+internet_val = df1["Internet Usage"].values[0]
+
+if pd.notna(internet_val) and internet_val > 0:
+    col3.metric("Internet Usage (%)", f"{internet_val:.2f}%")
+else:
+    col3.metric("Internet Usage", "No Data")
 
 # ================= DATA VIEW =================
 st.subheader(f"📄 Data for {country1}")
 st.dataframe(df1)
 
-# ================= COMPARISON CHART =================
+# ================= COMPARISON =================
 st.subheader("📊 Country Comparison")
 
 metrics = ["GDP", "Population Total", "CO2 Emissions"]
@@ -97,13 +96,13 @@ if metric in df.columns:
         ax.set_ylabel("Value (Millions)")
         st.pyplot(fig)
     except:
-        st.warning("Data not available for comparison")
+        st.warning("Data not available")
 
-# ================= SCATTER ANALYSIS =================
+# ================= SCATTER =================
 st.subheader("📈 Scatter Analysis")
 
-x_axis = st.selectbox("Select X-axis", df.columns)
-y_axis = st.selectbox("Select Y-axis", df.columns)
+x_axis = st.selectbox("X-axis", df.columns)
+y_axis = st.selectbox("Y-axis", df.columns)
 
 fig, ax = plt.subplots()
 ax.scatter(df[x_axis], df[y_axis])
@@ -124,29 +123,25 @@ with col2:
     if "Tourism Outbound" in df.columns:
         st.bar_chart(df1["Tourism Outbound"])
 
-# ================= MAP VISUALIZATION =================
-st.subheader("🌍 World Map Visualization")
+# ================= MAP =================
+st.subheader("🌍 World Map")
 
 metric_map = st.selectbox(
-    "Select Metric for Map",
+    "Map Metric",
     ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
 )
 
 if metric_map in df.columns:
-    try:
-        fig = px.choropleth(
-            df,
-            locations="Country",
-            locationmode="country names",
-            color=metric_map,
-            hover_name="Country",
-            color_continuous_scale="Viridis",
-            title=f"{metric_map} by Country"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-    except:
-        st.warning("Map could not be generated")
+    fig = px.choropleth(
+        df,
+        locations="Country",
+        locationmode="country names",
+        color=metric_map,
+        hover_name="Country",
+        color_continuous_scale="Viridis",
+        title=f"{metric_map} by Country"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # ================= DOWNLOAD =================
 st.subheader("⬇️ Download Data")
@@ -162,4 +157,4 @@ st.download_button(
 
 # ================= FOOTER =================
 st.markdown("---")
-st.markdown("🚀 Final Professional Dashboard | Built using Streamlit & Plotly")
+st.markdown("🚀 Final Professional Dashboard | Streamlit + Plotly")
