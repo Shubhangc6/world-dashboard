@@ -17,14 +17,19 @@ df.columns = df.columns.str.strip()
 def clean_column(col):
     return pd.to_numeric(df[col].astype(str).str.replace('[\$,]', '', regex=True), errors='coerce')
 
+# Clean numeric columns
 for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound"]:
     if col in df.columns:
         df[col] = clean_column(col)
 
-# Fix Internet Usage
+# 🔥 FIX Internet Usage (handles %, decimal, string)
 if "Internet Usage" in df.columns:
     df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True)
     df["Internet Usage"] = pd.to_numeric(df["Internet Usage"], errors='coerce')
+
+    # Convert decimal to percentage if needed
+    if df["Internet Usage"].max() <= 1:
+        df["Internet Usage"] = df["Internet Usage"] * 100
 
 # ================= SIDEBAR =================
 st.sidebar.header("Filters")
@@ -47,11 +52,25 @@ st.subheader("📊 Key Metrics")
 
 col1, col2, col3 = st.columns(3)
 
-col1.metric("GDP", format_millions(df1["GDP"].values[0]))
-col2.metric("Population", format_millions(df1["Population Total"].values[0]))
-
+# GDP
 try:
-    col3.metric("Internet Usage (%)", f"{df1['Internet Usage'].values[0]:.2f}%")
+    col1.metric("GDP", format_millions(df1["GDP"].values[0]))
+except:
+    col1.metric("GDP", "N/A")
+
+# Population
+try:
+    col2.metric("Population", format_millions(df1["Population Total"].values[0]))
+except:
+    col2.metric("Population", "N/A")
+
+# Internet Usage (FIXED)
+try:
+    val = df1["Internet Usage"].values[0]
+    if pd.notna(val):
+        col3.metric("Internet Usage (%)", f"{val:.2f}%")
+    else:
+        col3.metric("Internet Usage", "N/A")
 except:
     col3.metric("Internet Usage", "N/A")
 
@@ -66,16 +85,19 @@ metrics = ["GDP", "Population Total", "CO2 Emissions"]
 metric = st.selectbox("Select Metric", metrics)
 
 if metric in df.columns:
-    values = [
-        df1[metric].values[0] / 1_000_000,
-        df2[metric].values[0] / 1_000_000
-    ]
+    try:
+        values = [
+            df1[metric].values[0] / 1_000_000,
+            df2[metric].values[0] / 1_000_000
+        ]
 
-    fig, ax = plt.subplots()
-    ax.bar([country1, country2], values)
-    ax.set_title(metric)
-    ax.set_ylabel("Value (Millions)")
-    st.pyplot(fig)
+        fig, ax = plt.subplots()
+        ax.bar([country1, country2], values)
+        ax.set_title(metric)
+        ax.set_ylabel("Value (Millions)")
+        st.pyplot(fig)
+    except:
+        st.warning("Data not available for comparison")
 
 # ================= SCATTER ANALYSIS =================
 st.subheader("📈 Scatter Analysis")
@@ -111,17 +133,20 @@ metric_map = st.selectbox(
 )
 
 if metric_map in df.columns:
-    fig = px.choropleth(
-        df,
-        locations="Country",
-        locationmode="country names",
-        color=metric_map,
-        hover_name="Country",
-        color_continuous_scale="Viridis",
-        title=f"{metric_map} by Country"
-    )
+    try:
+        fig = px.choropleth(
+            df,
+            locations="Country",
+            locationmode="country names",
+            color=metric_map,
+            hover_name="Country",
+            color_continuous_scale="Viridis",
+            title=f"{metric_map} by Country"
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
+    except:
+        st.warning("Map could not be generated")
 
 # ================= DOWNLOAD =================
 st.subheader("⬇️ Download Data")
@@ -137,4 +162,4 @@ st.download_button(
 
 # ================= FOOTER =================
 st.markdown("---")
-st.markdown("🚀 Advanced Dashboard with Map | Built using Streamlit & Plotly")
+st.markdown("🚀 Final Professional Dashboard | Built using Streamlit & Plotly")
