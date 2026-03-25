@@ -26,19 +26,14 @@ for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound"]:
     if col in df.columns:
         df[col] = clean_numeric(col)
 
-# 🔥 STRONG Internet Usage Fix (handles all cases)
 if "Internet Usage" in df.columns:
     df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True).str.strip()
     df["Internet Usage"] = pd.to_numeric(df["Internet Usage"], errors='coerce')
 
-    # Case 1: decimal values (0.65 → 65)
-    if df["Internet Usage"].max() <= 1:
-        df["Internet Usage"] = df["Internet Usage"] * 100
-
-    # Case 2: wrongly scaled (6500 → 65)
-    elif df["Internet Usage"].max() > 1000:
-        df["Internet Usage"] = df["Internet Usage"] / 100
-
+    # Convert decimal to %
+    df["Internet Usage"] = df["Internet Usage"].apply(
+        lambda x: x * 100 if pd.notna(x) and x <= 1 else x
+    )
 # ================= SIDEBAR =================
 st.sidebar.header("Filters")
 
@@ -65,13 +60,12 @@ col1.metric("GDP", format_millions(df1["GDP"].values[0]))
 # Population
 col2.metric("Population", format_millions(df1["Population Total"].values[0]))
 
-# 🔥 Internet Usage FINAL FIX
 internet_val = df1["Internet Usage"].values[0]
 
-if pd.notna(internet_val) and internet_val > 0:
+if pd.notna(internet_val):
     col3.metric("Internet Usage (%)", f"{internet_val:.2f}%")
 else:
-    col3.metric("Internet Usage", "No Data")
+    col3.metric("Internet Usage (%)", "0.00%")
 
 # ================= DATA VIEW =================
 st.subheader(f"📄 Data for {country1}")
