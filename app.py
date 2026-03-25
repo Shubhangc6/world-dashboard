@@ -2,114 +2,102 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Page config
 st.set_page_config(page_title="World Dashboard", layout="wide")
 
-# Title
 st.title("🌍 World Development Dashboard")
 
-# Load dataset
+# Load data
 df = pd.read_excel("World_development_mesurement.xlsx")
-
-# Clean column names
 df.columns = df.columns.str.strip()
 
-# Sidebar filter
+# ===== DATA CLEANING =====
+def clean_column(col):
+    return pd.to_numeric(df[col].astype(str).str.replace('[\$,]', '', regex=True), errors='coerce')
+
+for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound"]:
+    if col in df.columns:
+        df[col] = clean_column(col)
+
+# ===== SIDEBAR =====
 st.sidebar.header("Filters")
-country = st.sidebar.selectbox("Select Country", df["Country"].unique())
 
-# Filter data
-filtered_df = df[df["Country"] == country]
+country1 = st.sidebar.selectbox("Select Country 1", df["Country"].unique())
+country2 = st.sidebar.selectbox("Select Country 2 (Comparison)", df["Country"].unique())
 
-# ================= KPI SECTION =================
-st.subheader("📊 Key Metrics")
+df1 = df[df["Country"] == country1]
+df2 = df[df["Country"] == country2]
+
+# ===== KPI SECTION =====
+st.subheader("📊 Key Metrics Comparison")
 
 col1, col2, col3 = st.columns(3)
 
-try:
-    col1.metric("GDP", f"{filtered_df['GDP'].values[0]:,.0f}")
-except:
-    col1.metric("GDP", "N/A")
+def get_value(data, col):
+    try:
+        return f"{data[col].values[0]:,.0f}"
+    except:
+        return "N/A"
 
-try:
-    col2.metric("Population", f"{filtered_df['Population Total'].values[0]:,.0f}")
-except:
-    col2.metric("Population", "N/A")
+col1.metric("GDP", get_value(df1, "GDP"), delta=None)
+col2.metric("Population", get_value(df1, "Population Total"))
+col3.metric("Internet Usage", get_value(df1, "Internet Usage"))
 
-try:
-    col3.metric("Internet Usage", f"{filtered_df['Internet Usage'].values[0]}")
-except:
-    col3.metric("Internet Usage", "N/A")
+# ===== DATA VIEW =====
+st.subheader("📄 Data Preview")
+st.dataframe(df1)
 
-# ================= DATA PREVIEW =================
-st.subheader(f"📄 Data for {country}")
-st.dataframe(filtered_df)
+# ===== COMPARISON BAR CHART =====
+st.subheader("📊 Country Comparison")
 
-# ================= CHARTS =================
-col1, col2 = st.columns(2)
+metrics = ["GDP", "Population Total", "CO2 Emissions"]
 
-# GDP vs Population
-with col1:
-    st.subheader("📈 GDP vs Population")
-    if "GDP" in df.columns and "Population Total" in df.columns:
-        fig, ax = plt.subplots()
-        ax.scatter(filtered_df["GDP"], filtered_df["Population Total"])
-        ax.set_xlabel("GDP")
-        ax.set_ylabel("Population Total")
-        st.pyplot(fig)
+metric = st.selectbox("Select Metric", metrics)
 
-# Life Expectancy
-with col2:
-    st.subheader("👨‍👩‍👧 Life Expectancy")
-    if "Life Expectancy Male" in df.columns and "Life Expectancy Female" in df.columns:
-        fig, ax = plt.subplots()
-        ax.bar(
-            ["Male", "Female"],
-            [
-                filtered_df["Life Expectancy Male"].values[0],
-                filtered_df["Life Expectancy Female"].values[0]
-            ]
-        )
-        st.pyplot(fig)
+if metric in df.columns:
+    values = [df1[metric].values[0], df2[metric].values[0]]
 
-# ================= MORE CHARTS =================
-col1, col2 = st.columns(2)
+    fig, ax = plt.subplots()
+    ax.bar([country1, country2], values)
+    ax.set_title(metric)
+    st.pyplot(fig)
 
-# CO2 Emissions
-with col1:
-    st.subheader("🌫️ CO2 Emissions")
-    if "CO2 Emissions" in df.columns:
-        st.bar_chart(filtered_df["CO2 Emissions"])
+# ===== INTERACTIVE CHART =====
+st.subheader("📈 Scatter Analysis")
 
-# Internet Usage
-with col2:
-    st.subheader("🌐 Internet Usage")
-    if "Internet Usage" in df.columns:
-        st.bar_chart(filtered_df["Internet Usage"])
+x_axis = st.selectbox("Select X-axis", df.columns)
+y_axis = st.selectbox("Select Y-axis", df.columns)
 
-# ================= TOURISM DATA CLEANING =================
-# Clean currency columns if present
-if "Tourism Inbound" in df.columns:
-    df["Tourism Inbound"] = df["Tourism Inbound"].astype(str).str.replace('[\$,]', '', regex=True)
-    df["Tourism Inbound"] = pd.to_numeric(df["Tourism Inbound"], errors='coerce')
+fig, ax = plt.subplots()
+ax.scatter(df[x_axis], df[y_axis])
+ax.set_xlabel(x_axis)
+ax.set_ylabel(y_axis)
+st.pyplot(fig)
 
-if "Tourism Outbound" in df.columns:
-    df["Tourism Outbound"] = df["Tourism Outbound"].astype(str).str.replace('[\$,]', '', regex=True)
-    df["Tourism Outbound"] = pd.to_numeric(df["Tourism Outbound"], errors='coerce')
-
-# Tourism charts
+# ===== TOURISM =====
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("✈️ Tourism Inbound")
     if "Tourism Inbound" in df.columns:
-        st.bar_chart(filtered_df["Tourism Inbound"])
+        st.bar_chart(df1["Tourism Inbound"])
 
 with col2:
     st.subheader("🌍 Tourism Outbound")
     if "Tourism Outbound" in df.columns:
-        st.bar_chart(filtered_df["Tourism Outbound"])
+        st.bar_chart(df1["Tourism Outbound"])
 
-# ================= FOOTER =================
+# ===== DOWNLOAD BUTTON =====
+st.subheader("⬇️ Download Data")
+
+csv = df.to_csv(index=False).encode('utf-8')
+
+st.download_button(
+    label="Download Dataset",
+    data=csv,
+    file_name='world_data.csv',
+    mime='text/csv'
+)
+
+# ===== FOOTER =====
 st.markdown("---")
-st.markdown("📌 Developed using Streamlit | Data Visualization Project")
+st.markdown("🚀 Advanced Dashboard | Built with Streamlit")
