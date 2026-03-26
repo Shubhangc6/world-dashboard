@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 import plotly.express as px
-from sklearn.linear_model import LinearRegression
-import numpy as np
 
 # ================= PAGE CONFIG =================
 st.set_page_config(page_title="World Dashboard", layout="wide")
 
-st.title("🌍 Advanced World Development Dashboard")
+st.title("🌍 World Development Dashboard")
 
 # ================= LOAD DATA =================
 df = pd.read_excel("World_development_mesurement.xlsx")
@@ -20,135 +19,140 @@ def clean_numeric(col):
         errors='coerce'
     )
 
-for col in ["GDP", "Population Total", "CO2 Emissions"]:
+for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound"]:
     if col in df.columns:
         df[col] = clean_numeric(col)
 
-# 🔥 INTERNET USAGE FIX (FINAL)
+# Internet Usage Fix (FINAL)
 if "Internet Usage" in df.columns:
-    df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True)
+    df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True).str.strip()
     df["Internet Usage"] = pd.to_numeric(df["Internet Usage"], errors='coerce')
 
+    # 🔥 Convert properly
     df["Internet Usage"] = df["Internet Usage"].apply(
         lambda x: x * 100 if pd.notna(x) and x <= 1 else x
     )
 
 # ================= SIDEBAR =================
-st.sidebar.header("🔍 Filters")
+st.sidebar.header("Filters")
 
-countries = st.sidebar.multiselect(
-    "Select Countries",
-    df["Country"].unique(),
-    default=df["Country"].unique()[:2]
-)
+country1 = st.sidebar.selectbox("Select Country 1", df["Country"].unique())
+country2 = st.sidebar.selectbox("Select Country 2 (Comparison)", df["Country"].unique())
 
-metric = st.sidebar.selectbox(
-    "Select Metric",
-    ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
-)
+df1 = df[df["Country"] == country1]
+df2 = df[df["Country"] == country2]
+
+# ================= FORMAT =================
+def format_m(value):
+    return f"{value/1_000_000:.2f} M" if pd.notna(value) else "N/A"
 
 # ================= KPI =================
 st.subheader("📊 Key Metrics")
 
-if len(countries) > 0:
-    df_kpi = df[df["Country"] == countries[0]]
+col1, col2, col3 = st.columns(3)
 
-    col1, col2, col3 = st.columns(3)
+col1.metric("GDP", format_m(df1["GDP"].values[0]))
+col2.metric("Population", format_m(df1["Population Total"].values[0]))
 
-    col1.metric("GDP", f"{df_kpi['GDP'].values[0]/1_000_000:.2f} M")
-    col2.metric("Population", f"{df_kpi['Population Total'].values[0]/1_000_000:.2f} M")
-    col3.metric("Internet Usage", f"{df_kpi['Internet Usage'].values[0]:.2f}%")
+internet_val = df1["Internet Usage"].values[0]
 
-# ================= MULTI COUNTRY TREND =================
-st.subheader("📊 Multi-Country Trend Comparison")
+if pd.notna(internet_val):
+    col3.metric("Internet Usage (%)", f"{internet_val:.2f}%")
+else:
+    col3.metric("Internet Usage (%)", "0.00%")
 
-if "Year" in df.columns:
+# ================= DATA =================
+st.subheader(f"📄 Data for {country1}")
+st.dataframe(df1)
 
-    trend_df = df[df["Country"].isin(countries)].sort_values("Year")
+# ================= COMPARISON =================
+st.subheader("📊 Country Comparison")
 
-    fig = px.line(
-        trend_df,
-        x="Year",
-        y=metric,
-        color="Country",
-        markers=True,
-        title=f"{metric} Trend Comparison"
-    )
+metric = st.selectbox("Select Metric", ["GDP", "Population Total", "CO2 Emissions"])
 
-    st.plotly_chart(fig, use_container_width=True)
+try:
+    values = [
+        df1[metric].values[0] / 1_000_000,
+        df2[metric].values[0] / 1_000_000
+    ]
 
-# ================= GROWTH RATE =================
-st.subheader("📉 Growth Rate (%)")
+    fig, ax = plt.subplots()
+    ax.bar([country1, country2], values)
+    ax.set_title(metric)
+    ax.set_ylabel("Value (Millions)")
+    st.pyplot(fig)
+except:
+    st.warning("Comparison not available")
 
-if "Year" in df.columns and len(countries) > 0:
+# ================= SCATTER =================
+st.subheader("📈 Scatter Analysis")
 
-    growth_data = []
+x_axis = st.selectbox("X-axis", df.columns)
+y_axis = st.selectbox("Y-axis", df.columns)
 
-    for country in countries:
-        temp = df[df["Country"] == country].sort_values("Year")
+fig, ax = plt.subplots()
+ax.scatter(df[x_axis], df[y_axis])
+ax.set_xlabel(x_axis)
+ax.set_ylabel(y_axis)
+st.pyplot(fig)
 
-        if len(temp) > 1:
-            first = temp[metric].iloc[0]
-            last = temp[metric].iloc[-1]
+# ================= TOURISM =================
+col1, col2 = st.columns(2)
 
-            if first != 0:
-                growth = ((last - first) / first) * 100
-                growth_data.append((country, growth))
+with col1:
+    st.subheader("✈️ Tourism Inbound")
+    if "Tourism Inbound" in df.columns:
+        st.bar_chart(df1["Tourism Inbound"])
 
-    growth_df = pd.DataFrame(growth_data, columns=["Country", "Growth %"])
-
-    fig_growth = px.bar(
-        growth_df,
-        x="Country",
-        y="Growth %",
-        title=f"{metric} Growth Rate"
-    )
-
-    st.plotly_chart(fig_growth, use_container_width=True)
-
-# ================= FORECASTING =================
-st.subheader("📈 Forecast (Future Prediction)")
-
-if "Year" in df.columns and len(countries) > 0:
-
-    country_forecast = st.selectbox("Select Country for Forecast", countries)
-
-    forecast_df = df[df["Country"] == country_forecast].sort_values("Year")
-
-    if len(forecast_df) > 2:
-
-        X = forecast_df["Year"].values.reshape(-1, 1)
-        y = forecast_df[metric].values
-
-        model = LinearRegression()
-        model.fit(X, y)
-
-        future_years = np.array(range(int(X.max()), int(X.max()) + 6)).reshape(-1, 1)
-        predictions = model.predict(future_years)
-
-        forecast_plot = px.line(
-            x=list(X.flatten()) + list(future_years.flatten()),
-            y=list(y) + list(predictions),
-            labels={"x": "Year", "y": metric},
-            title=f"{metric} Forecast for {country_forecast}"
-        )
-
-        st.plotly_chart(forecast_plot, use_container_width=True)
+with col2:
+    st.subheader("🌍 Tourism Outbound")
+    if "Tourism Outbound" in df.columns:
+        st.bar_chart(df1["Tourism Outbound"])
 
 # ================= MAP =================
-st.subheader("🌍 Global Map")
+st.subheader("🌍 World Map")
 
-fig_map = px.choropleth(
+metric_map = st.selectbox(
+    "Select Metric for Map",
+    ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
+)
+
+fig = px.choropleth(
     df,
     locations="Country",
     locationmode="country names",
-    color=metric,
+    color=metric_map,
     hover_name="Country",
-    color_continuous_scale="Viridis"
+    color_continuous_scale="Viridis",
+    title=f"{metric_map} by Country"
 )
 
-st.plotly_chart(fig_map, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
+
+# ================= INSIGHTS =================
+st.subheader("🧠 Key Insights")
+
+try:
+    top_gdp = df.loc[df["GDP"].idxmax()]["Country"]
+    top_internet = df.loc[df["Internet Usage"].idxmax()]["Country"]
+
+    st.write(f"🌍 **Highest GDP Country:** {top_gdp}")
+    st.write(f"🌐 **Highest Internet Usage:** {top_internet}")
+except:
+    st.write("Insights not available")
+
+# ================= DOWNLOAD =================
+st.subheader("⬇️ Download Data")
+
+csv = df.to_csv(index=False).encode('utf-8')
+
+st.download_button(
+    label="Download Dataset",
+    data=csv,
+    file_name='world_data.csv',
+    mime='text/csv'
+)
 
 # ================= FOOTER =================
 st.markdown("---")
-st.markdown("🚀 Advanced Analytics Dashboard | Streamlit + Plotly + ML")
+st.markdown("🚀 Professional Dashboard | Streamlit + Plotly | Portfolio Project")
