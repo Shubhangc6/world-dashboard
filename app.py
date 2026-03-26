@@ -97,7 +97,7 @@ ax.set_ylabel(y_axis)
 st.pyplot(fig)
 
 import plotly.express as px
-=============================================================
+# =============================================================
 if "Year" in df.columns:
 
     metric_trend = st.selectbox(
