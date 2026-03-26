@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import plotly.express as px
 
 # ================= PAGE CONFIG =================
 st.set_page_config(page_title="World Dashboard", layout="wide")
 
-st.title("🌍 World Development Dashboard")
+# ================= TITLE =================
+st.markdown("<h1 style='text-align: center;'>🌍 World Development Dashboard</h1>", unsafe_allow_html=True)
 
 # ================= LOAD DATA =================
 df = pd.read_excel("World_development_mesurement.xlsx")
@@ -19,25 +19,25 @@ def clean_numeric(col):
         errors='coerce'
     )
 
-for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound"]:
+for col in ["GDP", "Population Total", "CO2 Emissions"]:
     if col in df.columns:
         df[col] = clean_numeric(col)
 
-# Internet Usage Fix (FINAL)
+# 🔥 FINAL INTERNET USAGE FIX (CORRECT LOGIC)
 if "Internet Usage" in df.columns:
     df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True).str.strip()
     df["Internet Usage"] = pd.to_numeric(df["Internet Usage"], errors='coerce')
 
-    # 🔥 Convert properly
+    # If values are like 0.02 → convert to 2%
     df["Internet Usage"] = df["Internet Usage"].apply(
         lambda x: x * 100 if pd.notna(x) and x <= 1 else x
     )
 
 # ================= SIDEBAR =================
-st.sidebar.header("Filters")
+st.sidebar.header("🔍 Filters")
 
-country1 = st.sidebar.selectbox("Select Country 1", df["Country"].unique())
-country2 = st.sidebar.selectbox("Select Country 2 (Comparison)", df["Country"].unique())
+country1 = st.sidebar.selectbox("Select Country", df["Country"].unique())
+country2 = st.sidebar.selectbox("Compare With", df["Country"].unique())
 
 df1 = df[df["Country"] == country1]
 df2 = df[df["Country"] == country2]
@@ -55,59 +55,24 @@ col1.metric("GDP", format_m(df1["GDP"].values[0]))
 col2.metric("Population", format_m(df1["Population Total"].values[0]))
 
 internet_val = df1["Internet Usage"].values[0]
-
-if pd.notna(internet_val):
-    col3.metric("Internet Usage (%)", f"{internet_val:.2f}%")
-else:
-    col3.metric("Internet Usage (%)", "0.00%")
-
-# ================= DATA =================
-st.subheader(f"📄 Data for {country1}")
-st.dataframe(df1)
+col3.metric("Internet Usage (%)", f"{internet_val:.2f}%")
 
 # ================= COMPARISON =================
 st.subheader("📊 Country Comparison")
 
 metric = st.selectbox("Select Metric", ["GDP", "Population Total", "CO2 Emissions"])
 
-try:
-    values = [
-        df1[metric].values[0] / 1_000_000,
-        df2[metric].values[0] / 1_000_000
-    ]
+fig_bar = px.bar(
+    x=[country1, country2],
+    y=[
+        df1[metric].values[0],
+        df2[metric].values[0]
+    ],
+    labels={"x": "Country", "y": metric},
+    title=f"{metric} Comparison"
+)
 
-    fig, ax = plt.subplots()
-    ax.bar([country1, country2], values)
-    ax.set_title(metric)
-    ax.set_ylabel("Value (Millions)")
-    st.pyplot(fig)
-except:
-    st.warning("Comparison not available")
-
-# ================= SCATTER =================
-st.subheader("📈 Scatter Analysis")
-
-x_axis = st.selectbox("X-axis", df.columns)
-y_axis = st.selectbox("Y-axis", df.columns)
-
-fig, ax = plt.subplots()
-ax.scatter(df[x_axis], df[y_axis])
-ax.set_xlabel(x_axis)
-ax.set_ylabel(y_axis)
-st.pyplot(fig)
-
-# ================= TOURISM =================
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("✈️ Tourism Inbound")
-    if "Tourism Inbound" in df.columns:
-        st.bar_chart(df1["Tourism Inbound"])
-
-with col2:
-    st.subheader("🌍 Tourism Outbound")
-    if "Tourism Outbound" in df.columns:
-        st.bar_chart(df1["Tourism Outbound"])
+st.plotly_chart(fig_bar, use_container_width=True)
 
 # ================= MAP =================
 st.subheader("🌍 World Map")
@@ -117,42 +82,60 @@ metric_map = st.selectbox(
     ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
 )
 
-fig = px.choropleth(
+fig_map = px.choropleth(
     df,
     locations="Country",
     locationmode="country names",
     color=metric_map,
     hover_name="Country",
-    color_continuous_scale="Viridis",
-    title=f"{metric_map} by Country"
+    color_continuous_scale="Viridis"
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig_map, use_container_width=True)
 
-# ================= INSIGHTS =================
-st.subheader("🧠 Key Insights")
+# ================= TREND =================
+st.subheader("📈 Trend Over Years")
 
-try:
-    top_gdp = df.loc[df["GDP"].idxmax()]["Country"]
-    top_internet = df.loc[df["Internet Usage"].idxmax()]["Country"]
+if "Year" in df.columns:
 
-    st.write(f"🌍 **Highest GDP Country:** {top_gdp}")
-    st.write(f"🌐 **Highest Internet Usage:** {top_internet}")
-except:
-    st.write("Insights not available")
+    metric_trend = st.selectbox(
+        "Select Trend Metric",
+        ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
+    )
+
+    trend_df = df[df["Country"].isin([country1, country2])]
+
+    fig_line = px.line(
+        trend_df,
+        x="Year",
+        y=metric_trend,
+        color="Country",
+        markers=True,
+        title=f"{metric_trend} Trend Comparison"
+    )
+
+    st.plotly_chart(fig_line, use_container_width=True)
+
+else:
+    st.warning("Year column not found")
+
+# ================= DATA =================
+st.subheader("📄 Data Table")
+st.dataframe(df1)
 
 # ================= DOWNLOAD =================
-st.subheader("⬇️ Download Data")
-
 csv = df.to_csv(index=False).encode('utf-8')
 
 st.download_button(
-    label="Download Dataset",
-    data=csv,
-    file_name='world_data.csv',
-    mime='text/csv'
+    "⬇️ Download Data",
+    csv,
+    "world_data.csv",
+    "text/csv"
 )
 
 # ================= FOOTER =================
 st.markdown("---")
-st.markdown("🚀 Professional Dashboard | Streamlit + Plotly | Portfolio Project")
+st.markdown(
+    "<center>🚀 Professional Dashboard | Built with Streamlit & Plotly</center>",
+    unsafe_allow_html=True
+)
