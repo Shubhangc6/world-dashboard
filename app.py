@@ -96,6 +96,27 @@ ax.set_xlabel(x_axis)
 ax.set_ylabel(y_axis)
 st.pyplot(fig)
 
+import plotly.express as px
+=============================================================
+if "Year" in df.columns:
+
+    metric_trend = st.selectbox(
+        "Select Metric for Trend",
+        ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
+    )
+
+    trend_df = df[df["Country"] == country1].sort_values("Year")
+
+    fig = px.line(
+        trend_df,
+        x="Year",
+        y=metric_trend,
+        markers=True,
+        title=f"{metric_trend} Trend for {country1}"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 # ================= TOURISM =================
 col1, col2 = st.columns(2)
 
@@ -128,6 +149,35 @@ fig = px.choropleth(
 )
 
 st.plotly_chart(fig, use_container_width=True)
+
+# ================= TREND OVER YEARS =================
+st.subheader("📈 Trend Over Years")
+
+if "Year" in df.columns:
+
+    metric_trend = st.selectbox(
+        "Select Metric for Trend",
+        ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
+    )
+
+    # Filter data for selected country
+    trend_df = df[df["Country"] == country1]
+
+    # Sort by year
+    trend_df = trend_df.sort_values("Year")
+
+    # Plot
+    fig, ax = plt.subplots()
+    ax.plot(trend_df["Year"], trend_df[metric_trend], marker='o')
+
+    ax.set_title(f"{metric_trend} Trend for {country1}")
+    ax.set_xlabel("Year")
+    ax.set_ylabel(metric_trend)
+
+    st.pyplot(fig)
+
+else:
+    st.warning("Year column not found in dataset")
 
 # ================= INSIGHTS =================
 st.subheader("🧠 Key Insights")
