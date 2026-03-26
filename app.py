@@ -19,17 +19,22 @@ def clean_numeric(col):
         errors='coerce'
     )
 
-for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound"]:
+for col in ["GDP", "Population Total", "Tourism Inbound", "Tourism Outbound", "CO2 Emissions"]:
     if col in df.columns:
         df[col] = clean_numeric(col)
 
-# Internet Usage Fix (FINAL)
-if "Internet Usage" in df.columns:
-    df["Internet Usage"] = df["Internet Usage"].astype(str).str.replace('%', '', regex=True).str.strip()
-    df["Internet Usage"] = pd.to_numeric(df["Internet Usage"], errors='coerce')
+# ================= 🔥 INTERNET FIX (FINAL) =================
+internet_col = None
+for col in df.columns:
+    if "internet" in col.lower():
+        internet_col = col
+        break
 
-    # 🔥 Convert properly
-    df["Internet Usage"] = df["Internet Usage"].apply(
+if internet_col:
+    df[internet_col] = df[internet_col].astype(str).str.replace('%', '', regex=True).str.strip()
+    df[internet_col] = pd.to_numeric(df[internet_col], errors='coerce')
+
+    df[internet_col] = df[internet_col].apply(
         lambda x: x * 100 if pd.notna(x) and x <= 1 else x
     )
 
@@ -54,12 +59,8 @@ col1, col2, col3 = st.columns(3)
 col1.metric("GDP", format_m(df1["GDP"].values[0]))
 col2.metric("Population", format_m(df1["Population Total"].values[0]))
 
-internet_val = df1["Internet Usage"].values[0]
-
-if pd.notna(internet_val):
-    col3.metric("Internet Usage (%)", f"{internet_val:.2f}%")
-else:
-    col3.metric("Internet Usage (%)", "0.00%")
+internet_val = df1[internet_col].values[0] if internet_col else 0
+col3.metric("Internet Usage (%)", f"{internet_val:.2f}%")
 
 # ================= DATA =================
 st.subheader(f"📄 Data for {country1}")
@@ -114,7 +115,7 @@ st.subheader("🌍 World Map")
 
 metric_map = st.selectbox(
     "Select Metric for Map",
-    ["GDP", "Population Total", "CO2 Emissions", "Internet Usage"]
+    ["GDP", "Population Total", "CO2 Emissions", internet_col if internet_col else "GDP"]
 )
 
 fig = px.choropleth(
@@ -129,12 +130,34 @@ fig = px.choropleth(
 
 st.plotly_chart(fig, use_container_width=True)
 
+# ================= ADVANCED (SAFE) =================
+st.subheader("🚀 Advanced Comparison")
+
+countries = st.multiselect(
+    "Select Multiple Countries",
+    df["Country"].unique(),
+    default=[country1, country2]
+)
+
+if len(countries) > 1:
+    adv_df = df[df["Country"].isin(countries)]
+
+    fig = px.bar(
+        adv_df,
+        x="Country",
+        y=metric,
+        color="Country",
+        title=f"{metric} Comparison (Multiple Countries)"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 # ================= INSIGHTS =================
 st.subheader("🧠 Key Insights")
 
 try:
     top_gdp = df.loc[df["GDP"].idxmax()]["Country"]
-    top_internet = df.loc[df["Internet Usage"].idxmax()]["Country"]
+    top_internet = df.loc[df[internet_col].idxmax()]["Country"] if internet_col else "N/A"
 
     st.write(f"🌍 **Highest GDP Country:** {top_gdp}")
     st.write(f"🌐 **Highest Internet Usage:** {top_internet}")
