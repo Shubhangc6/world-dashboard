@@ -119,7 +119,7 @@ elif page == "Clustering Analysis":
         if "GDP" in features:
             summary = summary.sort_values("GDP")
 
-        labels = ["🔴 Low", "🟡 Medium", "🟢 High", "🔵 Very High", "🟣 Advanced", "⭐ Elite"]
+        labels = ["🔴 UnderDeveloped", "🟡 Developing", "🟢 Developed", "🔵 Very High", "🟣 Advanced", "⭐ Elite"]
         label_map = {row["Cluster"]: labels[i] for i, row in summary.iterrows()}
 
         cluster_df["Level"] = cluster_df["Cluster"].map(label_map)
